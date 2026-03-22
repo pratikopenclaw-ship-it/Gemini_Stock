@@ -39,23 +39,35 @@ interface IndexData {
 export function IndexGraphs() {
   const [indices, setIndices] = useState<IndexData[]>([]);
   const [loading, setLoading] = useState(true);
+  const [timeframe, setTimeframe] = useState<'1D' | '1W' | '1M' | '1Y' | 'LIVE'>('1D');
 
   useEffect(() => {
-    // Generate mock live index data
-    const generateHistory = (base: number) => {
+    // Generate mock index data based on timeframe
+    const generateHistory = (base: number, tf: string) => {
       const history = [];
       let last = base;
-      for (let i = 0; i < 30; i++) {
-        last += base * 0.002 * (Math.random() - 0.5);
-        history.push({ time: `${i}:00`, price: parseFloat(last.toFixed(2)) });
+      const points = tf === '1D' ? 24 : tf === '1W' ? 7 : tf === '1M' ? 30 : tf === '1Y' ? 52 : 30;
+      
+      for (let i = 0; i < points; i++) {
+        const volatility = tf === 'LIVE' ? 0.001 : 0.02;
+        last += base * volatility * (Math.random() - 0.5);
+        
+        let label = '';
+        if (tf === '1D') label = `${i}:00`;
+        else if (tf === '1W') label = `Day ${i + 1}`;
+        else if (tf === '1M') label = `Day ${i + 1}`;
+        else if (tf === '1Y') label = `Week ${i + 1}`;
+        else label = new Date(Date.now() - (30 - i) * 60000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+        history.push({ time: label, price: parseFloat(last.toFixed(2)) });
       }
       return history;
     };
 
-    const niftyHistory = generateHistory(23500);
-    const sensexHistory = generateHistory(77000);
+    const niftyHistory = generateHistory(23500, timeframe);
+    const sensexHistory = generateHistory(77000, timeframe);
 
-    setTimeout(() => {
+    const timer = setTimeout(() => {
       setIndices([
         {
           name: 'NIFTY 50',
@@ -73,34 +85,43 @@ export function IndexGraphs() {
         }
       ]);
       setLoading(false);
-    }, 0);
+    }, 300);
 
-    // Simulate live updates
-    const interval = setInterval(() => {
-      setIndices(prev => prev.map(idx => {
-        const lastPrice = idx.history[idx.history.length - 1].price;
-        const newPrice = parseFloat((lastPrice + lastPrice * 0.0005 * (Math.random() - 0.5)).toFixed(2));
-        const newHistory = [...idx.history.slice(1), { time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }), price: newPrice }];
-        
-        return {
-          ...idx,
-          value: newPrice,
-          change: parseFloat((newPrice - idx.history[0].price).toFixed(2)),
-          changePercent: parseFloat(((newPrice - idx.history[0].price) / idx.history[0].price * 100).toFixed(2)),
-          history: newHistory
-        };
-      }));
-    }, 5000);
+    // Simulate live updates only for LIVE timeframe
+    let interval: NodeJS.Timeout | null = null;
+    if (timeframe === 'LIVE') {
+      interval = setInterval(() => {
+        setIndices(prev => prev.map(idx => {
+          const lastPrice = idx.history[idx.history.length - 1].price;
+          const newPrice = parseFloat((lastPrice + lastPrice * 0.0005 * (Math.random() - 0.5)).toFixed(2));
+          const newHistory = [...idx.history.slice(1), { 
+            time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }), 
+            price: newPrice 
+          }];
+          
+          return {
+            ...idx,
+            value: newPrice,
+            change: parseFloat((newPrice - idx.history[0].price).toFixed(2)),
+            changePercent: parseFloat(((newPrice - idx.history[0].price) / idx.history[0].price * 100).toFixed(2)),
+            history: newHistory
+          };
+        }));
+      }, 3000);
+    }
 
-    return () => clearInterval(interval);
-  }, []);
+    return () => {
+      clearTimeout(timer);
+      if (interval) clearInterval(interval);
+    };
+  }, [timeframe]);
 
   return (
     <div className="glass-card p-6 h-full flex flex-col relative overflow-hidden group">
       {/* Background Glow */}
       <div className="absolute top-0 right-0 w-64 h-64 bg-neon-blue/5 blur-[100px] pointer-events-none"></div>
       
-      <div className="flex items-center justify-between mb-8 relative z-10">
+      <div className="flex flex-col md:flex-row md:items-center justify-between mb-8 relative z-10 space-y-4 md:space-y-0">
         <div className="flex items-center space-x-3">
           <div className="w-10 h-10 rounded-lg bg-neon-blue/20 flex items-center justify-center border border-neon-blue/30">
             <Activity className="w-5 h-5 text-neon-blue" />
@@ -109,14 +130,26 @@ export function IndexGraphs() {
             <h2 className="font-orbitron text-lg font-bold tracking-wider text-white">
               INDEX TERMINAL
             </h2>
-            <p className="text-[10px] font-bold text-white/40 uppercase tracking-widest">30-Min Real-time Stream</p>
+            <p className="text-[10px] font-bold text-white/40 uppercase tracking-widest">
+              {timeframe === 'LIVE' ? 'Real-time Stream' : `${timeframe} Historical Data`}
+            </p>
           </div>
         </div>
-        <div className="flex space-x-2">
-          <div className="flex items-center space-x-1 bg-neon-green/10 px-2 py-1 rounded border border-neon-green/20">
-            <Zap className="w-3 h-3 text-neon-green" />
-            <span className="text-[10px] font-bold text-neon-green uppercase">Live Sync</span>
-          </div>
+
+        <div className="flex items-center space-x-2 p-1 bg-white/5 rounded-lg border border-white/10">
+          {(['1D', '1W', '1M', '1Y', 'LIVE'] as const).map((tf) => (
+            <button
+              key={tf}
+              onClick={() => setTimeframe(tf)}
+              className={`px-3 py-1 rounded-md text-[10px] font-orbitron transition-all ${
+                timeframe === tf 
+                  ? 'bg-neon-blue text-black font-bold shadow-[0_0_10px_rgba(0,243,255,0.4)]' 
+                  : 'text-white/40 hover:text-white hover:bg-white/5'
+              }`}
+            >
+              {tf}
+            </button>
+          ))}
         </div>
       </div>
 

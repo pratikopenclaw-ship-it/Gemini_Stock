@@ -9,7 +9,8 @@ import {
   BarChart3, 
   Clock, 
   Globe, 
-  Info 
+  Info,
+  Zap
 } from 'lucide-react';
 import { StockAnalysisGraph } from '@/components/StockAnalysisGraph';
 import { motion, AnimatePresence } from 'motion/react';
@@ -173,6 +174,10 @@ export function StockModal({ symbol, isOpen, onClose }: StockModalProps) {
                 { label: 'High', value: formatINR(currentPrice * 1.02), icon: TrendingUp },
                 { label: 'Low', value: formatINR(currentPrice * 0.97), icon: TrendingDown },
                 { label: 'Volume', value: '1.2M', icon: BarChart3 },
+                { label: 'Market Cap', value: '₹4.2T', icon: Activity },
+                { label: 'P/E Ratio', value: '24.5', icon: Info },
+                { label: '52W High', value: formatINR(currentPrice * 1.15), icon: TrendingUp },
+                { label: '52W Low', value: formatINR(currentPrice * 0.85), icon: TrendingDown },
               ].map((stat, i) => (
                 <div key={i} className="bg-white/5 rounded-xl p-4 border border-white/10 hover:border-neon-blue/30 transition-colors">
                   <div className="flex items-center space-x-2 mb-2">
@@ -182,6 +187,100 @@ export function StockModal({ symbol, isOpen, onClose }: StockModalProps) {
                   <div className="text-lg font-mono font-bold text-white">{stat.value}</div>
                 </div>
               ))}
+            </div>
+
+            {/* Technical Analysis & Sentiment */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="bg-neon-blue/5 rounded-2xl p-6 border border-neon-blue/20">
+                <div className="flex items-center space-x-2 mb-4">
+                  <Activity className="w-5 h-5 text-neon-blue" />
+                  <h3 className="font-orbitron text-sm font-bold text-white uppercase tracking-wider">Technical Indicators</h3>
+                </div>
+                <div className="space-y-4">
+                  {[
+                    { name: 'RSI (14)', value: '62.4', status: 'Neutral', color: 'text-yellow-500' },
+                    { name: 'MACD', value: 'Bullish Crossover', status: 'Buy', color: 'text-neon-green' },
+                    { name: 'Moving Average (50)', value: formatINR(currentPrice * 0.95), status: 'Above', color: 'text-neon-green' },
+                    { name: 'Bollinger Bands', value: 'Upper Band', status: 'Resistance', color: 'text-red-500' },
+                  ].map((indicator, i) => (
+                    <div key={i} className="flex items-center justify-between border-b border-white/5 pb-2">
+                      <span className="text-xs text-white/60">{indicator.name}</span>
+                      <div className="text-right">
+                        <div className="text-xs font-mono font-bold text-white">{indicator.value}</div>
+                        <div className={`text-[10px] font-bold uppercase ${indicator.color}`}>{indicator.status}</div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="bg-neon-green/5 rounded-2xl p-6 border border-neon-green/20">
+                <div className="flex items-center space-x-2 mb-4">
+                  <Zap className="w-5 h-5 text-neon-green" />
+                  <h3 className="font-orbitron text-sm font-bold text-white uppercase tracking-wider">Sentiment Analysis</h3>
+                </div>
+                <div className="flex flex-col items-center justify-center h-full pb-6">
+                  <div className="relative w-32 h-32 flex items-center justify-center">
+                    <svg className="w-full h-full transform -rotate-90">
+                      <circle
+                        cx="64"
+                        cy="64"
+                        r="58"
+                        stroke="currentColor"
+                        strokeWidth="8"
+                        fill="transparent"
+                        className="text-white/5"
+                      />
+                      <circle
+                        cx="64"
+                        cy="64"
+                        r="58"
+                        stroke="currentColor"
+                        strokeWidth="8"
+                        fill="transparent"
+                        strokeDasharray={364}
+                        strokeDashoffset={364 - (364 * 0.75)}
+                        className="text-neon-green"
+                      />
+                    </svg>
+                    <div className="absolute inset-0 flex flex-col items-center justify-center">
+                      <span className="text-2xl font-orbitron font-bold text-white">75%</span>
+                      <span className="text-[8px] font-bold text-neon-green uppercase tracking-widest">Bullish</span>
+                    </div>
+                  </div>
+                  <p className="text-[10px] text-white/40 mt-4 text-center uppercase tracking-widest leading-relaxed">
+                    Based on 1.2k social signals & <br /> institutional flow data
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Recent Block Trades for this Symbol */}
+            <div className="glass-card p-6 border-white/10">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="font-orbitron text-sm font-bold text-white uppercase tracking-wider">Recent Block Activity</h3>
+                <span className="text-[10px] font-bold text-neon-blue bg-neon-blue/10 px-2 py-1 rounded border border-neon-blue/30 uppercase">Live Feed</span>
+              </div>
+              <div className="space-y-3">
+                {[
+                  { client: 'LIC OF INDIA', qty: '450k', price: currentPrice * 0.99, type: 'BUY' },
+                  { client: 'HDFC MUTUAL FUND', qty: '120k', price: currentPrice * 1.01, type: 'SELL' },
+                  { client: 'MORGAN STANLEY', qty: '85k', price: currentPrice * 0.995, type: 'BUY' },
+                ].map((trade, i) => (
+                  <div key={i} className="flex items-center justify-between p-3 bg-white/5 rounded-lg border border-white/5 hover:border-white/10 transition-all">
+                    <div className="flex items-center space-x-3">
+                      <div className={`w-1 h-8 rounded-full ${trade.type === 'BUY' ? 'bg-neon-green' : 'bg-red-500'}`}></div>
+                      <div>
+                        <div className="text-xs font-bold text-white">{trade.client}</div>
+                        <div className="text-[10px] text-white/40 uppercase tracking-tighter">{trade.qty} Shares @ {formatINR(trade.price)}</div>
+                      </div>
+                    </div>
+                    <span className={`text-[10px] font-bold px-2 py-1 rounded ${trade.type === 'BUY' ? 'text-neon-green bg-neon-green/10' : 'text-red-500 bg-red-500/10'}`}>
+                      {trade.type}
+                    </span>
+                  </div>
+                ))}
+              </div>
             </div>
 
             {/* About Section */}
