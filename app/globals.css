@@ -1,1 +1,67 @@
 @import "tailwindcss";
+
+@theme {
+  --color-background: #050505;
+  --color-neon-green: oklch(88% 0.21 142);
+  --color-cyber-blue: oklch(70% 0.19 250);
+  --color-glass: rgba(255, 255, 255, 0.05);
+  --color-glass-border: rgba(255, 255, 255, 0.1);
+  
+  --font-orbitron: "Orbitron", sans-serif;
+  --font-mono: "JetBrains Mono", monospace;
+}
+
+@layer base {
+  body {
+    @apply bg-background text-white font-mono selection:bg-neon-green selection:text-black;
+  }
+}
+
+@layer components {
+  .glass-card {
+    @apply bg-glass backdrop-blur-xl border border-glass-border rounded-xl;
+  }
+  
+  .neon-border-green {
+    @apply border border-neon-green/30 hover:border-neon-green/60 transition-colors;
+  }
+  
+  .neon-border-blue {
+    @apply border border-cyber-blue/30 hover:border-cyber-blue/60 transition-colors;
+  }
+  
+  .neon-glow-green {
+    @apply shadow-[0_0_15px_rgba(0,255,0,0.2)];
+  }
+  
+  .neon-glow-blue {
+    @apply shadow-[0_0_15px_rgba(0,180,255,0.2)];
+  }
+}
+
+/* Custom scrollbar for that cyber feel */
+::-webkit-scrollbar {
+  width: 4px;
+}
+
+::-webkit-scrollbar-track {
+  background: #050505;
+}
+
+::-webkit-scrollbar-thumb {
+  background: oklch(70% 0.19 250 / 0.3);
+  border-radius: 10px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: oklch(70% 0.19 250 / 0.6);
+}
+
+@keyframes ticker {
+  0% { transform: translateX(0); }
+  100% { transform: translateX(-50%); }
+}
+
+.animate-ticker {
+  animation: ticker 30s linear infinite;
+}
