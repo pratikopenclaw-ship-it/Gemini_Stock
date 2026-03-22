@@ -57,15 +57,25 @@ interface AISignal {
 }
 
 
+const formatToIST = (date: Date | string) => {
+  const d = typeof date === 'string' ? new Date(date) : date;
+  return d.toLocaleString('en-IN', {
+    timeZone: 'Asia/Kolkata',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false
+  });
+};
+
 const getNextMarketOpeningTime = () => {
-  const now = new Date();
-  const nextOpen = new Date(now);
+  // Get current time in IST
+  const nowIST = new Date(new Date().toLocaleString("en-US", {timeZone: "Asia/Kolkata"}));
   
-  // Set to 09:30 IST
+  const nextOpen = new Date(nowIST);
   nextOpen.setHours(9, 30, 0, 0);
   
-  // If it's already past 09:30, move to next day
-  if (now > nextOpen) {
+  // If it's already past 09:30 IST, move to next day
+  if (nowIST > nextOpen) {
     nextOpen.setDate(nextOpen.getDate() + 1);
   }
   
@@ -74,14 +84,20 @@ const getNextMarketOpeningTime = () => {
     nextOpen.setDate(nextOpen.getDate() + 1);
   }
   
-  return nextOpen.toLocaleString('en-IN', { 
+  const istTime = formatToIST(nextOpen);
+  const cetTime = nextOpen.toLocaleString('en-IN', { 
+    timeZone: 'Europe/Berlin',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false
+  });
+  
+  return `${nextOpen.toLocaleString('en-IN', { 
     timeZone: 'Asia/Kolkata',
     weekday: 'short',
     month: 'short',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit'
-  });
+    day: 'numeric'
+  })} - ${istTime} IST / ${cetTime} CET`;
 };
 
 export function StockModal({ symbol, isOpen, onClose }: StockModalProps) {
@@ -230,7 +246,7 @@ Analysis Protocol:
             const formattedData = history.map((p: any) => ({
               ...p,
               time: timeframe === '1D' 
-                ? new Date(p.time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                ? formatToIST(p.time)
                 : new Date(p.time).toLocaleDateString([], { month: 'short', day: 'numeric' })
             }));
             
@@ -375,9 +391,16 @@ Analysis Protocol:
                   <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/20 backdrop-blur-sm rounded-xl z-10 p-6 text-center">
                     <ShieldAlert className="w-12 h-12 text-red-500 mb-4 opacity-50" />
                     <p className="text-sm font-orbitron text-red-500 mb-2 uppercase tracking-wider">{error}</p>
-                    <p className="text-[10px] text-white/40 uppercase tracking-widest">
-                      {timeframe === 'LIVE' ? `Please visit during next market opening time: ${getNextMarketOpeningTime()}.` : 'The terminal is attempting to reconnect to alternate data nodes.'}
-                    </p>
+                    {timeframe === 'LIVE' ? (
+                      <div className="flex flex-col items-center">
+                        <p className="text-lg font-orbitron text-white font-bold uppercase tracking-wider mb-1">MARKET IS CLOSED</p>
+                        <p className="text-xl font-orbitron text-neon-blue font-bold tracking-wider">
+                          Next Opening: {getNextMarketOpeningTime()}
+                        </p>
+                      </div>
+                    ) : (
+                      <p className="text-[10px] text-white/40 uppercase tracking-widest">The terminal is attempting to reconnect to alternate data nodes.</p>
+                    )}
                   </div>
                 ) : data.length === 0 ? (
                   <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/20 backdrop-blur-sm rounded-xl z-10">
