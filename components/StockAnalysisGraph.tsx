@@ -38,8 +38,14 @@ export function StockAnalysisGraph({ data }: StockAnalysisGraphProps) {
         <ComposedChart data={data}>
           <defs>
             <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
-              <feGaussianBlur stdDeviation="3" result="blur" />
-              <feComposite in="SourceGraphic" in2="blur" operator="over" />
+              <feGaussianBlur stdDeviation="4" result="blur" />
+              <feFlood floodColor="#39FF14" floodOpacity="0.5" result="color" />
+              <feComposite in="color" in2="blur" operator="in" result="glow" />
+              <feMerge>
+                <feMergeNode in="glow" />
+                <feMergeNode in="glow" />
+                <feMergeNode in="SourceGraphic" />
+              </feMerge>
             </filter>
           </defs>
           <CartesianGrid strokeDasharray="3 3" stroke="#1A1A1A" vertical={false} />

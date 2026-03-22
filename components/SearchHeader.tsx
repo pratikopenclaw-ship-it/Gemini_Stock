@@ -1,7 +1,8 @@
 'use client';
 
 import React, { useState, useEffect, useRef } from 'react';
-import { Search, Filter, Bell, User, TrendingUp, TrendingDown } from 'lucide-react';
+import { Search, Filter, Bell, User, TrendingUp, TrendingDown, Globe } from 'lucide-react';
+import Link from 'next/link';
 import { motion, AnimatePresence } from 'motion/react';
 
 const ALL_SYMBOLS = [
@@ -68,10 +69,17 @@ export function SearchHeader({ onSearch, onSelectStock }: SearchHeaderProps) {
 
   return (
     <header className="flex items-center justify-between px-6 py-4 glass-card rounded-none border-x-0 border-t-0 mb-6 relative z-50">
-      <div className="flex items-center space-x-4">
+      <div className="flex items-center space-x-6">
         <h1 className="font-orbitron text-xl font-black tracking-tighter text-neon-green neon-glow-green">
           CYBER<span className="text-white">STOCK</span>
         </h1>
+        <Link 
+          href="/features" 
+          className="flex items-center space-x-2 px-3 py-1.5 rounded-lg bg-neon-blue/10 border border-neon-blue/20 hover:bg-neon-blue/20 hover:border-neon-blue/40 transition-all group"
+        >
+          <Globe className="w-4 h-4 text-neon-blue group-hover:animate-pulse" />
+          <span className="text-[10px] font-bold text-white/60 uppercase tracking-widest group-hover:text-neon-blue">Global Intel</span>
+        </Link>
       </div>
 
       <div className="flex-1 max-w-2xl mx-8 relative" ref={dropdownRef}>

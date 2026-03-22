@@ -62,8 +62,10 @@ export function StockModal({ symbol, isOpen, onClose }: StockModalProps) {
   const [change, setChange] = useState(0);
   const [changePercent, setChangePercent] = useState(0);
   const [loadingNews, setLoadingNews] = useState(false);
+  const [loadingHistory, setLoadingHistory] = useState(false);
   const [aiSignal, setAiSignal] = useState<AISignal | null>(null);
   const [loadingAI, setLoadingAI] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const fetchAIDecision = async (price: number, newsContext: string) => {
     setLoadingAI(true);
@@ -142,51 +144,57 @@ Analysis Protocol:
         }
       });
 
-      // Generate mock historical data based on timeframe
-      const config = {
-        '1D': { points: 24, interval: '1h' },
-        '1W': { points: 7, interval: '1d' },
-        '1M': { points: 30, interval: '1d' },
-        '1Y': { points: 52, interval: '1w' }
+      // Fetch historical data from our API
+      const fetchHistory = async () => {
+        setLoadingHistory(true);
+        setError(null);
+        try {
+          const res = await fetch(`/api/stock-intelligence?symbol=${symbol}&timeframe=${timeframe}`);
+          if (!res.ok) throw new Error(`API Error: ${res.status}`);
+          const result = await res.json();
+          
+          if (result.history && result.history.length > 0) {
+            const formattedData = result.history.map((p: any) => ({
+              ...p,
+              time: timeframe === '1D' 
+                ? new Date(p.time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                : new Date(p.time).toLocaleDateString([], { month: 'short', day: 'numeric' })
+            }));
+            
+            setData(formattedData);
+            const first = formattedData[0].price;
+            const last = formattedData[formattedData.length - 1].price;
+            setCurrentPrice(last);
+            setChange(parseFloat((last - first).toFixed(2)));
+            setChangePercent(parseFloat(((last - first) / first * 100).toFixed(2)));
+          } else {
+            setData([]);
+            setError("No historical data available for this symbol.");
+          }
+        } catch (error) {
+          console.error("Error fetching history:", error);
+          setError("Failed to synchronize with market data servers.");
+        } finally {
+          setLoadingHistory(false);
+        }
       };
 
-      const { points } = config[timeframe];
-      const basePrice = Math.random() * 2000 + 100;
-      const mockData: PricePoint[] = [];
-      let lastPrice = basePrice;
+      fetchHistory();
 
-      for (let i = 0; i < points; i++) {
-        const volatility = timeframe === '1D' ? 0.01 : 0.03;
-        const change = lastPrice * volatility * (Math.random() - 0.5);
-        lastPrice += change;
-        mockData.push({
-          time: timeframe === '1D' ? `${i}:00` : `P${i + 1}`,
-          price: parseFloat(lastPrice.toFixed(2)),
-          volume: Math.floor(Math.random() * 1000000) + 100000
-        });
-      }
-
-      setData(mockData);
-      const first = mockData[0].price;
-      const last = mockData[mockData.length - 1].price;
-      setCurrentPrice(last);
-      setChange(parseFloat((last - first).toFixed(2)));
-      setChangePercent(parseFloat(((last - first) / first * 100).toFixed(2)));
-
-      // Simulate live updates only for 1D
+      // Simulate live updates (Upstox WebSocket simulation)
       let interval: NodeJS.Timeout;
       if (timeframe === '1D') {
         interval = setInterval(() => {
           setData(prev => {
             if (prev.length === 0) return prev;
             const lastPoint = prev[prev.length - 1];
-            const volatility = 0.005;
+            const volatility = 0.0005; // Very low for live ticks
             const change = lastPoint.price * volatility * (Math.random() - 0.5);
             const newPrice = parseFloat((lastPoint.price + change).toFixed(2));
             const newPoint = {
               time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
               price: newPrice,
-              volume: Math.floor(Math.random() * 50000) + 10000
+              volume: Math.floor(Math.random() * 5000) + 1000
             };
             
             const newData = [...prev.slice(1), newPoint];
@@ -198,7 +206,7 @@ Analysis Protocol:
             
             return newData;
           });
-        }, 3000);
+        }, 2000);
       }
 
       return () => {
@@ -278,6 +286,23 @@ Analysis Protocol:
                 </div>
               </div>
               <div className="h-[400px] w-full relative">
+                {loadingHistory ? (
+                  <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/20 backdrop-blur-sm rounded-xl z-10">
+                    <div className="w-12 h-12 border-2 border-neon-blue border-t-transparent rounded-full animate-spin mb-4"></div>
+                    <p className="text-xs font-orbitron text-neon-blue animate-pulse">FETCHING MARKET DATA...</p>
+                  </div>
+                ) : error ? (
+                  <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/20 backdrop-blur-sm rounded-xl z-10 p-6 text-center">
+                    <ShieldAlert className="w-12 h-12 text-red-500 mb-4 opacity-50" />
+                    <p className="text-sm font-orbitron text-red-500 mb-2 uppercase tracking-wider">{error}</p>
+                    <p className="text-[10px] text-white/40 uppercase tracking-widest">The terminal is attempting to reconnect to alternate data nodes.</p>
+                  </div>
+                ) : data.length === 0 ? (
+                  <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/20 backdrop-blur-sm rounded-xl z-10">
+                    <Activity className="w-12 h-12 text-white/10 mb-4" />
+                    <p className="text-xs font-orbitron text-white/20 uppercase tracking-widest">Awaiting Data Stream Initialization...</p>
+                  </div>
+                ) : null}
                 <StockAnalysisGraph data={data} />
               </div>
             </div>
