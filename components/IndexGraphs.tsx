@@ -11,12 +11,13 @@ import {
 } from 'lucide-react';
 import { 
   ResponsiveContainer, 
-  AreaChart, 
-  Area, 
+  BarChart, 
+  Bar, 
   XAxis, 
   YAxis, 
   CartesianGrid, 
-  Tooltip 
+  Tooltip,
+  Cell
 } from 'recharts';
 import { motion } from 'motion/react';
 
@@ -39,14 +40,14 @@ interface IndexData {
 export function IndexGraphs() {
   const [indices, setIndices] = useState<IndexData[]>([]);
   const [loading, setLoading] = useState(true);
-  const [timeframe, setTimeframe] = useState<'1D' | '1W' | '1M' | '1Y' | 'LIVE'>('1D');
+  const [timeframe, setTimeframe] = useState<'1D' | '1W' | '1M' | '1Y' | 'LIVE'>('LIVE');
 
   useEffect(() => {
     // Generate mock index data based on timeframe
     const generateHistory = (base: number, tf: string) => {
       const history = [];
       let last = base;
-      const points = tf === '1D' ? 24 : tf === '1W' ? 7 : tf === '1M' ? 30 : tf === '1Y' ? 52 : 30;
+      const points = tf === '1D' ? 24 : tf === '1W' ? 7 : tf === '1M' ? 30 : tf === '1Y' ? 52 : 15;
       
       for (let i = 0; i < points; i++) {
         const volatility = tf === 'LIVE' ? 0.001 : 0.02;
@@ -57,7 +58,10 @@ export function IndexGraphs() {
         else if (tf === '1W') label = `Day ${i + 1}`;
         else if (tf === '1M') label = `Day ${i + 1}`;
         else if (tf === '1Y') label = `Week ${i + 1}`;
-        else label = new Date(Date.now() - (30 - i) * 60000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        else {
+          const date = new Date(Date.now() - (15 - i) * 60000);
+          label = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        }
 
         history.push({ time: label, price: parseFloat(last.toFixed(2)) });
       }
@@ -95,7 +99,7 @@ export function IndexGraphs() {
           const lastPrice = idx.history[idx.history.length - 1].price;
           const newPrice = parseFloat((lastPrice + lastPrice * 0.0005 * (Math.random() - 0.5)).toFixed(2));
           const newHistory = [...idx.history.slice(1), { 
-            time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }), 
+            time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }), 
             price: newPrice 
           }];
           
@@ -107,7 +111,7 @@ export function IndexGraphs() {
             history: newHistory
           };
         }));
-      }, 3000);
+      }, 60000); // Update every minute for 15 min window
     }
 
     return () => {
@@ -167,23 +171,24 @@ export function IndexGraphs() {
               </div>
             </div>
 
-            <div className="h-[180px] w-full bg-black/20 rounded-xl border border-glass-border p-2 relative group-hover:border-neon-blue/30 transition-colors">
+            <div className="h-[220px] w-full bg-black/20 rounded-xl border border-glass-border p-2 relative group-hover:border-neon-blue/30 transition-colors">
               <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={idx.history}>
-                  <defs>
-                    <linearGradient id={`color${i}`} x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor={idx.change >= 0 ? "#00FF41" : "#FF4444"} stopOpacity={0.2}/>
-                      <stop offset="95%" stopColor={idx.change >= 0 ? "#00FF41" : "#FF4444"} stopOpacity={0}/>
-                    </linearGradient>
-                  </defs>
-                  <Area 
-                    type="monotone" 
-                    dataKey="price" 
-                    stroke={idx.change >= 0 ? "#00FF41" : "#FF4444"} 
-                    strokeWidth={2}
-                    fillOpacity={1} 
-                    fill={`url(#color${i})`} 
-                    animationDuration={1000}
+                <BarChart data={idx.history}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#1A1A1A" vertical={false} />
+                  <XAxis 
+                    dataKey="time" 
+                    stroke="rgba(255,255,255,0.2)" 
+                    fontSize={8} 
+                    tickLine={false}
+                    axisLine={false}
+                  />
+                  <YAxis 
+                    stroke="rgba(255,255,255,0.2)" 
+                    fontSize={8} 
+                    tickLine={false}
+                    axisLine={false}
+                    domain={['auto', 'auto']}
+                    tickFormatter={(val) => `₹${val}`}
                   />
                   <Tooltip 
                     contentStyle={{ 
@@ -194,8 +199,22 @@ export function IndexGraphs() {
                       color: '#fff'
                     }}
                     itemStyle={{ color: '#00f3ff' }}
+                    formatter={(value: any) => [formatINR(Number(value) || 0), 'Price']}
                   />
-                </AreaChart>
+                  <Bar 
+                    dataKey="price" 
+                    radius={[4, 4, 0, 0]}
+                    animationDuration={1000}
+                  >
+                    {idx.history.map((entry, index) => (
+                      <Cell 
+                        key={`cell-${index}`} 
+                        fill={idx.change >= 0 ? "#00FF41" : "#FF4444"} 
+                        fillOpacity={0.8}
+                      />
+                    ))}
+                  </Bar>
+                </BarChart>
               </ResponsiveContainer>
             </div>
           </div>

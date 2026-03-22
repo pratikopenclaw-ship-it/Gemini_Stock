@@ -10,10 +10,19 @@ import {
   Clock, 
   Globe, 
   Info,
-  Zap
+  Zap,
+  Newspaper,
+  BrainCircuit,
+  Target,
+  ShieldAlert,
+  ArrowUpRight,
+  ArrowDownRight
 } from 'lucide-react';
 import { StockAnalysisGraph } from '@/components/StockAnalysisGraph';
+import { NewsCard } from '@/components/NewsCard';
 import { motion, AnimatePresence } from 'motion/react';
+import { fetchStockNews, NewsItem } from '@/lib/api';
+import { GoogleGenAI, Type } from "@google/genai";
 
 const formatINR = (value: number) => {
   return new Intl.NumberFormat('en-IN', {
@@ -35,67 +44,148 @@ interface PricePoint {
   volume: number;
 }
 
+interface AISignal {
+  signal: 'BUY' | 'SELL' | 'HOLD';
+  confidence_score: number;
+  entry_price: number;
+  stop_loss: number;
+  take_profit_1: number;
+  take_profit_2: number;
+  reasoning: string;
+}
+
 export function StockModal({ symbol, isOpen, onClose }: StockModalProps) {
   const [data, setData] = useState<PricePoint[]>([]);
+  const [news, setNews] = useState<NewsItem[]>([]);
   const [timeframe, setTimeframe] = useState<'1D' | '1W' | '1M' | '1Y'>('1D');
   const [currentPrice, setCurrentPrice] = useState(0);
   const [change, setChange] = useState(0);
   const [changePercent, setChangePercent] = useState(0);
+  const [loadingNews, setLoadingNews] = useState(false);
+  const [aiSignal, setAiSignal] = useState<AISignal | null>(null);
+  const [loadingAI, setLoadingAI] = useState(false);
+
+  const fetchAIDecision = async (price: number, newsContext: string) => {
+    setLoadingAI(true);
+    try {
+      const ai = new GoogleGenAI({ apiKey: process.env.NEXT_PUBLIC_GEMINI_API_KEY! });
+      const response = await ai.models.generateContent({
+        model: "gemini-3-flash-preview",
+        contents: `Analyze $${symbol}.
+Current Price: ${price}.
+Indicators: RSI: 62, MACD: Bullish Crossover, SMA200: ${price * 0.9}.
+News: '${newsContext}'
+Goal: Provide Buy/Sell signal with Stop-Loss.`,
+        config: {
+          systemInstruction: `You are a Senior Quantitative Trading Analyst and Risk Manager.
+Task: Analyze the provided Stock Data (Technical Indicators + News Sentiment) to provide a high-probability trading signal.
+
+Analysis Protocol:
+1. Technical Alignment: Check if RSI, MACD, and Moving Averages (SMA 50/200) agree on trend direction.
+2. Sentiment Check: Analyze the 'News_Context' for bullish/bearish catalysts (Earnings, SEC filings, Macro trends).
+3. Volatility Adjustment: Use ATR (Average True Range) or recent Support/Resistance to calculate Stop-Loss.`,
+          responseMimeType: "application/json",
+          responseSchema: {
+            type: Type.OBJECT,
+            properties: {
+              signal: { type: Type.STRING, enum: ["BUY", "SELL", "HOLD"] },
+              confidence_score: { type: Type.NUMBER },
+              entry_price: { type: Type.NUMBER },
+              stop_loss: { type: Type.NUMBER },
+              take_profit_1: { type: Type.NUMBER },
+              take_profit_2: { type: Type.NUMBER },
+              reasoning: { type: Type.STRING }
+            },
+            required: ["signal", "confidence_score", "entry_price", "stop_loss", "take_profit_1", "take_profit_2", "reasoning"]
+          }
+        }
+      });
+
+      if (response.text) {
+        setAiSignal(JSON.parse(response.text));
+      }
+    } catch (error) {
+      console.error("AI Analysis Error:", error);
+    } finally {
+      setLoadingAI(false);
+    }
+  };
 
   useEffect(() => {
     if (isOpen) {
-      // Generate mock historical data
-      const points = timeframe === '1D' ? 24 : timeframe === '1W' ? 7 : timeframe === '1M' ? 30 : 52;
+      setLoadingNews(true);
+      fetchStockNews(symbol).then(newsData => {
+        setNews(newsData);
+        setLoadingNews(false);
+        
+        // Trigger AI analysis once news is loaded
+        if (newsData.length > 0 && currentPrice > 0) {
+          fetchAIDecision(currentPrice, newsData[0].summary);
+        }
+      });
+
+      // Generate mock historical data based on timeframe
+      const config = {
+        '1D': { points: 24, interval: '1h' },
+        '1W': { points: 7, interval: '1d' },
+        '1M': { points: 30, interval: '1d' },
+        '1Y': { points: 52, interval: '1w' }
+      };
+
+      const { points } = config[timeframe];
       const basePrice = Math.random() * 2000 + 100;
       const mockData: PricePoint[] = [];
       let lastPrice = basePrice;
 
       for (let i = 0; i < points; i++) {
-        const volatility = 0.02;
+        const volatility = timeframe === '1D' ? 0.01 : 0.03;
         const change = lastPrice * volatility * (Math.random() - 0.5);
         lastPrice += change;
         mockData.push({
-          time: timeframe === '1D' ? `${i}:00` : `Day ${i + 1}`,
+          time: timeframe === '1D' ? `${i}:00` : `P${i + 1}`,
           price: parseFloat(lastPrice.toFixed(2)),
           volume: Math.floor(Math.random() * 1000000) + 100000
         });
       }
 
-      setTimeout(() => {
-        setData(mockData);
-        const first = mockData[0].price;
-        const last = mockData[mockData.length - 1].price;
-        setCurrentPrice(last);
-        setChange(parseFloat((last - first).toFixed(2)));
-        setChangePercent(parseFloat(((last - first) / first * 100).toFixed(2)));
-      }, 0);
+      setData(mockData);
+      const first = mockData[0].price;
+      const last = mockData[mockData.length - 1].price;
+      setCurrentPrice(last);
+      setChange(parseFloat((last - first).toFixed(2)));
+      setChangePercent(parseFloat(((last - first) / first * 100).toFixed(2)));
 
-      // Simulate live updates
-      const interval = setInterval(() => {
-        setData(prev => {
-          if (prev.length === 0) return prev;
-          const lastPoint = prev[prev.length - 1];
-          const volatility = 0.005;
-          const change = lastPoint.price * volatility * (Math.random() - 0.5);
-          const newPrice = parseFloat((lastPoint.price + change).toFixed(2));
-          const newPoint = {
-            time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
-            price: newPrice,
-            volume: Math.floor(Math.random() * 50000) + 10000
-          };
-          
-          const newData = [...prev.slice(1), newPoint];
-          const first = newData[0].price;
-          const last = newData[newData.length - 1].price;
-          setCurrentPrice(last);
-          setChange(parseFloat((last - first).toFixed(2)));
-          setChangePercent(parseFloat(((last - first) / first * 100).toFixed(2)));
-          
-          return newData;
-        });
-      }, 3000);
+      // Simulate live updates only for 1D
+      let interval: NodeJS.Timeout;
+      if (timeframe === '1D') {
+        interval = setInterval(() => {
+          setData(prev => {
+            if (prev.length === 0) return prev;
+            const lastPoint = prev[prev.length - 1];
+            const volatility = 0.005;
+            const change = lastPoint.price * volatility * (Math.random() - 0.5);
+            const newPrice = parseFloat((lastPoint.price + change).toFixed(2));
+            const newPoint = {
+              time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+              price: newPrice,
+              volume: Math.floor(Math.random() * 50000) + 10000
+            };
+            
+            const newData = [...prev.slice(1), newPoint];
+            const first = newData[0].price;
+            const last = newData[newData.length - 1].price;
+            setCurrentPrice(last);
+            setChange(parseFloat((last - first).toFixed(2)));
+            setChangePercent(parseFloat(((last - first) / first * 100).toFixed(2)));
+            
+            return newData;
+          });
+        }, 3000);
+      }
 
-      return () => clearInterval(interval);
+      return () => {
+        if (interval) clearInterval(interval);
+      };
     }
   }, [isOpen, timeframe, symbol]);
 
@@ -157,14 +247,20 @@ export function StockModal({ symbol, isOpen, onClose }: StockModalProps) {
             </div>
 
             {/* Main Graph */}
-            <div className="h-[400px] w-full relative">
-              <div className="absolute top-4 left-4 z-10">
+            <div className="bg-white/5 rounded-2xl p-6 border border-white/10">
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center space-x-2">
+                  <BarChart3 className="w-5 h-5 text-neon-blue" />
+                  <h3 className="font-orbitron text-sm font-bold text-white uppercase tracking-wider">Stock History & Performance</h3>
+                </div>
                 <div className="flex items-center space-x-2 text-[10px] font-bold text-white/20 uppercase tracking-widest">
                   <Clock className="w-3 h-3" />
                   <span>Real-time Market Data Stream</span>
                 </div>
               </div>
-              <StockAnalysisGraph data={data} />
+              <div className="h-[400px] w-full relative">
+                <StockAnalysisGraph data={data} />
+              </div>
             </div>
 
             {/* Stats Grid */}
@@ -190,7 +286,111 @@ export function StockModal({ symbol, isOpen, onClose }: StockModalProps) {
             </div>
 
             {/* Technical Analysis & Sentiment */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              {/* Stock Brain AI Section */}
+              <div className="lg:col-span-2 bg-gradient-to-br from-neon-blue/10 to-transparent rounded-2xl p-6 border border-neon-blue/30 relative overflow-hidden group">
+                <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
+                  <BrainCircuit className="w-24 h-24 text-neon-blue" />
+                </div>
+                
+                <div className="flex items-center justify-between mb-6">
+                  <div className="flex items-center space-x-3">
+                    <div className="p-2 bg-neon-blue/20 rounded-lg">
+                      <BrainCircuit className="w-5 h-5 text-neon-blue" />
+                    </div>
+                    <h3 className="font-orbitron text-sm font-bold text-white uppercase tracking-wider">Stock Brain Intelligence</h3>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <span className="text-[10px] font-bold text-neon-blue/60 uppercase tracking-widest">Quant Analysis Protocol v4.2</span>
+                    <div className={`w-2 h-2 rounded-full ${loadingAI ? 'bg-yellow-500 animate-pulse' : 'bg-neon-green'}`}></div>
+                  </div>
+                </div>
+
+                {loadingAI ? (
+                  <div className="flex flex-col items-center justify-center py-12 space-y-4">
+                    <div className="w-12 h-12 border-2 border-neon-blue border-t-transparent rounded-full animate-spin"></div>
+                    <p className="text-xs font-orbitron text-neon-blue animate-pulse">SYNCHRONIZING NEURAL NETWORKS...</p>
+                  </div>
+                ) : aiSignal ? (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div className="space-y-6">
+                      <div className="flex items-center justify-between p-4 bg-white/5 rounded-xl border border-white/10">
+                        <div>
+                          <p className="text-[10px] font-bold text-white/40 uppercase mb-1">Trading Signal</p>
+                          <p className={`text-2xl font-orbitron font-bold ${
+                            aiSignal.signal === 'BUY' ? 'text-neon-green' : 
+                            aiSignal.signal === 'SELL' ? 'text-red-500' : 'text-yellow-500'
+                          }`}>
+                            {aiSignal.signal}
+                          </p>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-[10px] font-bold text-white/40 uppercase mb-1">Confidence</p>
+                          <p className="text-2xl font-mono font-bold text-white">{aiSignal.confidence_score}%</p>
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="p-3 bg-white/5 rounded-lg border border-white/5">
+                          <div className="flex items-center space-x-2 mb-1">
+                            <Target className="w-3 h-3 text-neon-blue" />
+                            <span className="text-[10px] font-bold text-white/40 uppercase">Entry</span>
+                          </div>
+                          <p className="text-sm font-mono font-bold text-white">{formatINR(aiSignal.entry_price)}</p>
+                        </div>
+                        <div className="p-3 bg-white/5 rounded-lg border border-white/5">
+                          <div className="flex items-center space-x-2 mb-1">
+                            <ShieldAlert className="w-3 h-3 text-red-500" />
+                            <span className="text-[10px] font-bold text-white/40 uppercase">Stop Loss</span>
+                          </div>
+                          <p className="text-sm font-mono font-bold text-red-500">{formatINR(aiSignal.stop_loss)}</p>
+                        </div>
+                      </div>
+
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between p-3 bg-neon-green/5 rounded-lg border border-neon-green/20">
+                          <div className="flex items-center space-x-2">
+                            <ArrowUpRight className="w-3 h-3 text-neon-green" />
+                            <span className="text-[10px] font-bold text-neon-green/60 uppercase">Target 1</span>
+                          </div>
+                          <p className="text-sm font-mono font-bold text-neon-green">{formatINR(aiSignal.take_profit_1)}</p>
+                        </div>
+                        <div className="flex items-center justify-between p-3 bg-neon-green/10 rounded-lg border border-neon-green/30">
+                          <div className="flex items-center space-x-2">
+                            <ArrowUpRight className="w-3 h-3 text-neon-green" />
+                            <span className="text-[10px] font-bold text-neon-green/60 uppercase">Target 2</span>
+                          </div>
+                          <p className="text-sm font-mono font-bold text-neon-green">{formatINR(aiSignal.take_profit_2)}</p>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="flex flex-col justify-between">
+                      <div className="bg-black/40 rounded-xl p-4 border border-white/5 h-full">
+                        <p className="text-[10px] font-bold text-neon-blue uppercase mb-3 tracking-widest">AI Reasoning Protocol</p>
+                        <p className="text-xs text-white/70 leading-relaxed italic">
+                          &quot;{aiSignal.reasoning}&quot;
+                        </p>
+                        <div className="mt-6 pt-4 border-t border-white/5">
+                          <div className="flex items-center space-x-2 mb-2">
+                            <Activity className="w-3 h-3 text-neon-blue" />
+                            <span className="text-[10px] font-bold text-white/40 uppercase">Technical Alignment</span>
+                          </div>
+                          <div className="w-full bg-white/5 h-1 rounded-full overflow-hidden">
+                            <div className="bg-neon-blue h-full" style={{ width: '85%' }}></div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex flex-col items-center justify-center py-12 text-white/20">
+                    <BrainCircuit className="w-12 h-12 mb-2 opacity-10" />
+                    <p className="text-xs font-orbitron uppercase tracking-widest">Awaiting Market Context...</p>
+                  </div>
+                )}
+              </div>
+
               <div className="bg-neon-blue/5 rounded-2xl p-6 border border-neon-blue/20">
                 <div className="flex items-center space-x-2 mb-4">
                   <Activity className="w-5 h-5 text-neon-blue" />
@@ -213,73 +413,61 @@ export function StockModal({ symbol, isOpen, onClose }: StockModalProps) {
                   ))}
                 </div>
               </div>
-
-              <div className="bg-neon-green/5 rounded-2xl p-6 border border-neon-green/20">
-                <div className="flex items-center space-x-2 mb-4">
-                  <Zap className="w-5 h-5 text-neon-green" />
-                  <h3 className="font-orbitron text-sm font-bold text-white uppercase tracking-wider">Sentiment Analysis</h3>
-                </div>
-                <div className="flex flex-col items-center justify-center h-full pb-6">
-                  <div className="relative w-32 h-32 flex items-center justify-center">
-                    <svg className="w-full h-full transform -rotate-90">
-                      <circle
-                        cx="64"
-                        cy="64"
-                        r="58"
-                        stroke="currentColor"
-                        strokeWidth="8"
-                        fill="transparent"
-                        className="text-white/5"
-                      />
-                      <circle
-                        cx="64"
-                        cy="64"
-                        r="58"
-                        stroke="currentColor"
-                        strokeWidth="8"
-                        fill="transparent"
-                        strokeDasharray={364}
-                        strokeDashoffset={364 - (364 * 0.75)}
-                        className="text-neon-green"
-                      />
-                    </svg>
-                    <div className="absolute inset-0 flex flex-col items-center justify-center">
-                      <span className="text-2xl font-orbitron font-bold text-white">75%</span>
-                      <span className="text-[8px] font-bold text-neon-green uppercase tracking-widest">Bullish</span>
-                    </div>
-                  </div>
-                  <p className="text-[10px] text-white/40 mt-4 text-center uppercase tracking-widest leading-relaxed">
-                    Based on 1.2k social signals & <br /> institutional flow data
-                  </p>
-                </div>
-              </div>
             </div>
 
             {/* Recent Block Trades for this Symbol */}
-            <div className="glass-card p-6 border-white/10">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="font-orbitron text-sm font-bold text-white uppercase tracking-wider">Recent Block Activity</h3>
-                <span className="text-[10px] font-bold text-neon-blue bg-neon-blue/10 px-2 py-1 rounded border border-neon-blue/30 uppercase">Live Feed</span>
-              </div>
-              <div className="space-y-3">
-                {[
-                  { client: 'LIC OF INDIA', qty: '450k', price: currentPrice * 0.99, type: 'BUY' },
-                  { client: 'HDFC MUTUAL FUND', qty: '120k', price: currentPrice * 1.01, type: 'SELL' },
-                  { client: 'MORGAN STANLEY', qty: '85k', price: currentPrice * 0.995, type: 'BUY' },
-                ].map((trade, i) => (
-                  <div key={i} className="flex items-center justify-between p-3 bg-white/5 rounded-lg border border-white/5 hover:border-white/10 transition-all">
-                    <div className="flex items-center space-x-3">
-                      <div className={`w-1 h-8 rounded-full ${trade.type === 'BUY' ? 'bg-neon-green' : 'bg-red-500'}`}></div>
-                      <div>
-                        <div className="text-xs font-bold text-white">{trade.client}</div>
-                        <div className="text-[10px] text-white/40 uppercase tracking-tighter">{trade.qty} Shares @ {formatINR(trade.price)}</div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="glass-card p-6 border-white/10">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="font-orbitron text-sm font-bold text-white uppercase tracking-wider">Recent Block Activity</h3>
+                  <span className="text-[10px] font-bold text-neon-blue bg-neon-blue/10 px-2 py-1 rounded border border-neon-blue/30 uppercase">Live Feed</span>
+                </div>
+                <div className="space-y-3">
+                  {[
+                    { client: 'LIC OF INDIA', qty: '450k', price: currentPrice * 0.99, type: 'BUY' },
+                    { client: 'HDFC MUTUAL FUND', qty: '120k', price: currentPrice * 1.01, type: 'SELL' },
+                    { client: 'MORGAN STANLEY', qty: '85k', price: currentPrice * 0.995, type: 'BUY' },
+                  ].map((trade, i) => (
+                    <div key={i} className="flex items-center justify-between p-3 bg-white/5 rounded-lg border border-white/5 hover:border-white/10 transition-all">
+                      <div className="flex items-center space-x-3">
+                        <div className={`w-1 h-8 rounded-full ${trade.type === 'BUY' ? 'bg-neon-green' : 'bg-red-500'}`}></div>
+                        <div>
+                          <div className="text-xs font-bold text-white">{trade.client}</div>
+                          <div className="text-[10px] text-white/40 uppercase tracking-tighter">{trade.qty} Shares @ {formatINR(trade.price)}</div>
+                        </div>
                       </div>
+                      <span className={`text-[10px] font-bold px-2 py-1 rounded ${trade.type === 'BUY' ? 'text-neon-green bg-neon-green/10' : 'text-red-500 bg-red-500/10'}`}>
+                        {trade.type}
+                      </span>
                     </div>
-                    <span className={`text-[10px] font-bold px-2 py-1 rounded ${trade.type === 'BUY' ? 'text-neon-green bg-neon-green/10' : 'text-red-500 bg-red-500/10'}`}>
-                      {trade.type}
-                    </span>
+                  ))}
+                </div>
+              </div>
+
+              <div className="glass-card p-6 border-white/10 flex flex-col">
+                <div className="flex items-center justify-between mb-4">
+                  <div className="flex items-center space-x-2">
+                    <Newspaper className="w-5 h-5 text-neon-green" />
+                    <h3 className="font-orbitron text-sm font-bold text-white uppercase tracking-wider">Latest News</h3>
                   </div>
-                ))}
+                  <span className="text-[10px] font-bold text-white/40 uppercase tracking-widest">Real-time Feed</span>
+                </div>
+                <div className="flex-1 overflow-y-auto max-h-[300px] pr-2 space-y-4 custom-scrollbar">
+                  {loadingNews ? (
+                    Array(3).fill(0).map((_, i) => (
+                      <div key={i} className="h-24 bg-white/5 rounded-xl animate-pulse border border-white/10"></div>
+                    ))
+                  ) : news.length > 0 ? (
+                    news.map((item, i) => (
+                      <NewsCard key={i} news={item} />
+                    ))
+                  ) : (
+                    <div className="flex flex-col items-center justify-center h-full py-10 text-white/20">
+                      <Newspaper className="w-8 h-8 mb-2 opacity-20" />
+                      <p className="text-[10px] font-bold uppercase tracking-widest">No recent news found</p>
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
 

@@ -8,6 +8,7 @@ import { TradeAnalysis } from '@/components/TradeAnalysis';
 import { IndexGraphs } from '@/components/IndexGraphs';
 import { GeopoliticalMap } from '@/components/GeopoliticalMap';
 import { StockModal } from '@/components/StockModal';
+import { Watchlist } from '@/components/Watchlist';
 import { fetchStockNews, getMockTrades, NewsItem, TradeItem } from '@/lib/api';
 import { 
   DndContext, 
@@ -59,7 +60,7 @@ export default function Dashboard() {
   const [trades, setTrades] = useState<TradeItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
-  const [layout, setLayout] = useState(['indices', 'news-feed', 'trade-analysis', 'geopolitical-map']);
+  const [layout, setLayout] = useState(['indices', 'news-feed', 'trade-analysis', 'watchlist', 'geopolitical-map']);
   const [selectedStock, setSelectedStock] = useState<string | null>(null);
 
   const sensors = useSensors(
@@ -138,6 +139,8 @@ export default function Dashboard() {
         );
       case 'trade-analysis':
         return <TradeAnalysis trades={trades} onStockClick={setSelectedStock} />;
+      case 'watchlist':
+        return <Watchlist onSelectStock={setSelectedStock} />;
       case 'geopolitical-map':
         return <GeopoliticalMap />;
       default:
@@ -166,6 +169,7 @@ export default function Dashboard() {
                     className={
                       id === 'indices' ? 'lg:col-span-12' : 
                       id === 'geopolitical-map' ? 'lg:col-span-12' :
+                      id === 'watchlist' ? 'lg:col-span-12' :
                       id === 'news-feed' ? 'lg:col-span-5' : 
                       'lg:col-span-7'
                     }
