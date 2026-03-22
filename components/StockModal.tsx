@@ -68,14 +68,32 @@ export function StockModal({ symbol, isOpen, onClose }: StockModalProps) {
   const fetchAIDecision = async (price: number, newsContext: string) => {
     setLoadingAI(true);
     try {
+      // 1. Fetch real-time stock intelligence from our API
+      const intelRes = await fetch(`/api/stock-intelligence?symbol=${symbol}`);
+      const intelData = await intelRes.json();
+      
+      const dataContext = `
+        SYMBOL: ${symbol}
+        PRICE: ${price}
+        TECHNICALS: ${intelData.technicals || 'RSI: 55'}
+        SENTIMENT: ${intelData.sentiment || 'Bullish: 60, Bearish: 40'}
+        NEWS BRIEF: ${intelData.newsBrief || '10 articles tracked this week'}
+        NEWS_CONTEXT: ${newsContext}
+      `;
+
       const ai = new GoogleGenAI({ apiKey: process.env.NEXT_PUBLIC_GEMINI_API_KEY! });
       const response = await ai.models.generateContent({
         model: "gemini-3-flash-preview",
-        contents: `Analyze $${symbol}.
-Current Price: ${price}.
-Indicators: RSI: 62, MACD: Bullish Crossover, SMA200: ${price * 0.9}.
-News: '${newsContext}'
-Goal: Provide Buy/Sell signal with Stop-Loss.`,
+        contents: `Analyze this data: ${dataContext}
+        
+        Provide a JSON response with:
+        - signal: (BUY, SELL, or HOLD)
+        - confidence_score: (0-100)
+        - entry_price: (Current market estimate)
+        - stop_loss: (Calculated based on volatility)
+        - take_profit_1: (Target 1)
+        - take_profit_2: (Target 2)
+        - reasoning: (1-sentence technical justification)`,
         config: {
           systemInstruction: `You are a Senior Quantitative Trading Analyst and Risk Manager.
 Task: Analyze the provided Stock Data (Technical Indicators + News Sentiment) to provide a high-probability trading signal.
