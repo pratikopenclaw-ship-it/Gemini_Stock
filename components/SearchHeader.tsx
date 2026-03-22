@@ -27,16 +27,24 @@ interface SearchHeaderProps {
 export function SearchHeader({ onSearch, onSelectStock }: SearchHeaderProps) {
   const [query, setQuery] = useState('');
   const [isFocused, setIsFocused] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
-  const results = query.length >= 3 
+  const results = query.length > 0 
     ? ALL_SYMBOLS.filter(s => 
         s.symbol.toLowerCase().includes(query.toLowerCase()) || 
         s.name.toLowerCase().includes(query.toLowerCase())
       ).slice(0, 5)
-    : [];
+    : ALL_SYMBOLS.slice(0, 4); // Show top 4 as "Trending" if empty
 
   const showDropdown = isFocused && results.length > 0;
+
+  useEffect(() => {
+    // Auto-focus on mount for terminal-like experience
+    if (inputRef.current) {
+      inputRef.current.focus();
+    }
+  }, []);
 
   useEffect(() => {
     onSearch(query);
@@ -70,6 +78,7 @@ export function SearchHeader({ onSearch, onSelectStock }: SearchHeaderProps) {
         <div className="relative group">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-cyber-blue group-focus-within:text-neon-green transition-colors" />
           <input
+            ref={inputRef}
             type="text"
             value={query}
             placeholder="SEARCH SYMBOL (E.G. SBI, RELIANCE, MAZDOCK)..."
@@ -87,8 +96,13 @@ export function SearchHeader({ onSearch, onSelectStock }: SearchHeaderProps) {
               exit={{ opacity: 0, y: -10 }}
               className="absolute top-full left-0 right-0 mt-2 glass-card bg-black/90 border-neon-blue/30 overflow-hidden shadow-[0_10px_30px_rgba(0,0,0,0.5)]"
             >
-              <div className="p-2 border-b border-white/5">
-                <span className="text-[10px] font-bold text-white/40 uppercase tracking-widest">Top Results</span>
+              <div className="p-2 border-b border-white/5 flex justify-between items-center">
+                <span className="text-[10px] font-bold text-white/40 uppercase tracking-widest">
+                  {query.length > 0 ? 'Search Results' : 'Trending Stocks'}
+                </span>
+                {query.length === 0 && (
+                  <span className="text-[8px] font-bold text-neon-green uppercase animate-pulse">Live</span>
+                )}
               </div>
               <div className="max-h-64 overflow-y-auto">
                 {results.map((stock) => (

@@ -89,7 +89,7 @@ export function IndexGraphs() {
         }
       ]);
       setLoading(false);
-    }, 300);
+    }, 0);
 
     // Simulate live updates only for LIVE timeframe
     let interval: NodeJS.Timeout | null = null;
@@ -160,10 +160,10 @@ export function IndexGraphs() {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-8 flex-1">
         {indices.map((idx, i) => (
           <div key={i} className="flex flex-col space-y-4">
-            <div className="flex items-end justify-between">
+            <div className="flex items-end justify-between border-b border-white/5 pb-2">
               <div>
-                <h3 className="font-orbitron text-sm font-bold text-white/60 mb-1">{idx.name}</h3>
-                <div className="text-2xl font-mono font-bold text-white">{formatINR(idx.value)}</div>
+                <h3 className="font-orbitron text-[10px] font-bold text-neon-blue/60 uppercase tracking-tighter mb-1">{idx.name}</h3>
+                <div className="text-2xl font-mono font-bold text-white tracking-tighter">{formatINR(idx.value)}</div>
               </div>
               <div className={`flex items-center font-mono text-sm ${idx.change >= 0 ? 'text-neon-green' : 'text-red-500'}`}>
                 {idx.change >= 0 ? <TrendingUp className="w-4 h-4 mr-1" /> : <TrendingDown className="w-4 h-4 mr-1" />}
@@ -199,7 +199,7 @@ export function IndexGraphs() {
                       color: '#fff'
                     }}
                     itemStyle={{ color: '#00f3ff' }}
-                    formatter={(value: any) => [formatINR(Number(value) || 0), 'Price']}
+                    formatter={(value: number) => [formatINR(value), 'Price']}
                   />
                   <Bar 
                     dataKey="price" 

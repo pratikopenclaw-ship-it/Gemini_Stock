@@ -205,6 +205,7 @@ Analysis Protocol:
         if (interval) clearInterval(interval);
       };
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, timeframe, symbol]);
 
   if (!isOpen) return null;
