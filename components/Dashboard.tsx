@@ -10,6 +10,8 @@ import { GeopoliticalMap } from '@/components/GeopoliticalMap';
 import { StockModal } from '@/components/StockModal';
 import { Watchlist } from '@/components/Watchlist';
 import { fetchStockNews, getMockTrades, NewsItem, TradeItem } from '@/lib/api';
+import { isMarketClosed } from '@/lib/time';
+import { Activity } from 'lucide-react';
 import { 
   DndContext, 
   closestCenter,
@@ -62,6 +64,18 @@ export default function Dashboard() {
   const [searchQuery, setSearchQuery] = useState('');
   const [layout, setLayout] = useState(['indices', 'news-feed', 'trade-analysis', 'watchlist', 'geopolitical-map']);
   const [selectedStock, setSelectedStock] = useState<string | null>(null);
+  const [isLive, setIsLive] = useState(true);
+
+  useEffect(() => {
+    const checkMarket = () => {
+      if (isMarketClosed()) {
+        setIsLive(false);
+      }
+    };
+    checkMarket();
+    const interval = setInterval(checkMarket, 60000);
+    return () => clearInterval(interval);
+  }, []);
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -158,6 +172,20 @@ export default function Dashboard() {
       
       <main className="flex-1 p-6 max-w-[1600px] mx-auto w-full">
         <SearchHeader onSearch={setSearchQuery} onSelectStock={setSelectedStock} />
+
+        <div className="flex justify-end mb-4">
+          <button
+            onClick={() => setIsLive(!isLive)}
+            className={`px-4 py-1.5 rounded-md text-xs font-orbitron transition-all flex items-center space-x-2 ${
+              isLive 
+                ? 'bg-neon-green text-black font-bold' 
+                : 'bg-white/5 text-white/40'
+            }`}
+          >
+            <Activity className="w-3 h-3" />
+            <span>{isLive ? 'LIVE DATA: ON' : 'LIVE DATA: PAUSED'}</span>
+          </button>
+        </div>
 
         {mounted ? (
           <DndContext 

@@ -22,7 +22,9 @@ import { StockAnalysisGraph } from '@/components/StockAnalysisGraph';
 import { NewsCard } from '@/components/NewsCard';
 import { motion, AnimatePresence } from 'motion/react';
 import { fetchStockNews, NewsItem } from '@/lib/api';
+import { isMarketClosed, IST_TIMEZONE } from '@/lib/time';
 import { GoogleGenAI, Type } from "@google/genai";
+import { formatInTimeZone } from 'date-fns-tz';
 
 const formatINR = (value: number) => {
   return new Intl.NumberFormat('en-IN', {
@@ -54,10 +56,38 @@ interface AISignal {
   reasoning: string;
 }
 
+
+const getNextMarketOpeningTime = () => {
+  const now = new Date();
+  const nextOpen = new Date(now);
+  
+  // Set to 09:30 IST
+  nextOpen.setHours(9, 30, 0, 0);
+  
+  // If it's already past 09:30, move to next day
+  if (now > nextOpen) {
+    nextOpen.setDate(nextOpen.getDate() + 1);
+  }
+  
+  // Skip weekends
+  while (nextOpen.getDay() === 0 || nextOpen.getDay() === 6) {
+    nextOpen.setDate(nextOpen.getDate() + 1);
+  }
+  
+  return nextOpen.toLocaleString('en-IN', { 
+    timeZone: 'Asia/Kolkata',
+    weekday: 'short',
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit'
+  });
+};
+
 export function StockModal({ symbol, isOpen, onClose }: StockModalProps) {
   const [data, setData] = useState<PricePoint[]>([]);
   const [news, setNews] = useState<NewsItem[]>([]);
-  const [timeframe, setTimeframe] = useState<'1D' | '1W' | '1M' | '1Y'>('1D');
+  const [timeframe, setTimeframe] = useState<'1D' | '1W' | '1M' | '1Y' | 'LIVE'>('1D');
   const [currentPrice, setCurrentPrice] = useState(0);
   const [change, setChange] = useState(0);
   const [changePercent, setChangePercent] = useState(0);
@@ -66,6 +96,7 @@ export function StockModal({ symbol, isOpen, onClose }: StockModalProps) {
   const [aiSignal, setAiSignal] = useState<AISignal | null>(null);
   const [loadingAI, setLoadingAI] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const isLive = timeframe === 'LIVE';
 
   const fetchAIDecision = async (price: number, newsContext: string) => {
     setLoadingAI(true);
@@ -154,7 +185,49 @@ Analysis Protocol:
           const result = await res.json();
           
           if (result.history && result.history.length > 0) {
-            const formattedData = result.history.map((p: any) => ({
+            let history = result.history;
+            if (timeframe === '1D' || timeframe === 'LIVE') {
+              // Filter for 09:30 to 15:30 IST
+              history = history.filter((p: any) => {
+                const d = new Date(p.time);
+                const istTimeStr = formatInTimeZone(d, IST_TIMEZONE, "HH:mm");
+                const [hours, minutes] = istTimeStr.split(':').map(Number);
+                const timeInMinutes = hours * 60 + minutes;
+                const isWithin = timeInMinutes >= (9 * 60 + 30) && timeInMinutes <= (15 * 60 + 30);
+                return isWithin;
+              });
+              console.log("History after 1D/LIVE filter:", history.length, "First:", history[0]?.time, "Last:", history[history.length - 1]?.time);
+
+              if (timeframe === 'LIVE') {
+                // Find the latest trading day in history
+                const sortedHistory = [...history].sort((a, b) => new Date(b.time).getTime() - new Date(a.time).getTime());
+                const latestDate = sortedHistory.length > 0 ? new Date(sortedHistory[0].time) : new Date();
+                
+                // Find the last 15:30 IST time before or at latestDate
+                const lastMarketClose = new Date(latestDate);
+                lastMarketClose.setHours(15, 30, 0, 0);
+                
+                // If the latest data is after 15:30, use the 15:30 of the same day, else previous day
+                if (lastMarketClose > latestDate) {
+                  lastMarketClose.setDate(lastMarketClose.getDate() - 1);
+                }
+                
+                // Adjust to Friday if it falls on a weekend
+                while (lastMarketClose.getDay() === 0 || lastMarketClose.getDay() === 6) {
+                   lastMarketClose.setDate(lastMarketClose.getDate() - 1);
+                }
+                
+                const startTime = new Date(lastMarketClose.getTime() - 15 * 60000);
+                
+                history = history.filter(p => {
+                  const d = new Date(p.time);
+                  return d >= startTime && d <= lastMarketClose;
+                });
+                
+                console.log("History after LIVE filter:", history.length, "Start:", startTime, "End:", lastMarketClose);
+              }
+            }
+            const formattedData = history.map((p: any) => ({
               ...p,
               time: timeframe === '1D' 
                 ? new Date(p.time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
@@ -162,11 +235,16 @@ Analysis Protocol:
             }));
             
             setData(formattedData);
-            const first = formattedData[0].price;
-            const last = formattedData[formattedData.length - 1].price;
-            setCurrentPrice(last);
-            setChange(parseFloat((last - first).toFixed(2)));
-            setChangePercent(parseFloat(((last - first) / first * 100).toFixed(2)));
+            if (formattedData.length > 0) {
+              const first = formattedData[0].price;
+              const last = formattedData[formattedData.length - 1].price;
+              setCurrentPrice(last);
+              setChange(parseFloat((last - first).toFixed(2)));
+              setChangePercent(parseFloat(((last - first) / first * 100).toFixed(2)));
+            } else {
+              setData([]);
+              setError("No historical data available for this symbol.");
+            }
           } else {
             setData([]);
             setError("No historical data available for this symbol.");
@@ -183,7 +261,7 @@ Analysis Protocol:
 
       // Simulate live updates (Upstox WebSocket simulation)
       let interval: NodeJS.Timeout;
-      if (timeframe === '1D') {
+      if (isLive && timeframe === '1D' && !isMarketClosed()) {
         interval = setInterval(() => {
           setData(prev => {
             if (prev.length === 0) return prev;
@@ -214,7 +292,7 @@ Analysis Protocol:
       };
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isOpen, timeframe, symbol]);
+  }, [isOpen, timeframe, symbol, isLive]);
 
   if (!isOpen) return null;
 
@@ -257,20 +335,22 @@ Analysis Protocol:
           {/* Content */}
           <div className="flex-1 overflow-y-auto p-6 space-y-6">
             {/* Timeframe Selector */}
-            <div className="flex space-x-2 p-1 bg-white/5 rounded-lg w-fit border border-white/10">
-              {(['1D', '1W', '1M', '1Y'] as const).map((tf) => (
-                <button
-                  key={tf}
-                  onClick={() => setTimeframe(tf)}
-                  className={`px-4 py-1.5 rounded-md text-xs font-orbitron transition-all ${
-                    timeframe === tf 
-                      ? 'bg-neon-blue text-black font-bold shadow-[0_0_15px_rgba(0,243,255,0.4)]' 
-                      : 'text-white/40 hover:text-white hover:bg-white/5'
-                  }`}
-                >
-                  {tf}
-                </button>
-              ))}
+            <div className="flex items-center justify-between">
+              <div className="flex space-x-2 p-1 bg-white/5 rounded-lg w-fit border border-white/10">
+                {(['1D', '1W', '1M', '1Y', 'LIVE'] as const).map((tf) => (
+                  <button
+                    key={tf}
+                    onClick={() => setTimeframe(tf)}
+                    className={`px-4 py-1.5 rounded-md text-xs font-orbitron transition-all ${
+                      timeframe === tf 
+                        ? 'bg-neon-blue text-black font-bold shadow-[0_0_15px_rgba(0,243,255,0.4)]' + (tf === 'LIVE' ? ' animate-pulse' : '')
+                        : 'text-white/40 hover:text-white hover:bg-white/5'
+                    } ${tf === '1D' ? 'border border-neon-blue/30' : ''}`}
+                  >
+                    {tf}
+                  </button>
+                ))}
+              </div>
             </div>
 
             {/* Main Graph */}
@@ -295,7 +375,9 @@ Analysis Protocol:
                   <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/20 backdrop-blur-sm rounded-xl z-10 p-6 text-center">
                     <ShieldAlert className="w-12 h-12 text-red-500 mb-4 opacity-50" />
                     <p className="text-sm font-orbitron text-red-500 mb-2 uppercase tracking-wider">{error}</p>
-                    <p className="text-[10px] text-white/40 uppercase tracking-widest">The terminal is attempting to reconnect to alternate data nodes.</p>
+                    <p className="text-[10px] text-white/40 uppercase tracking-widest">
+                      {timeframe === 'LIVE' ? `Please visit during next market opening time: ${getNextMarketOpeningTime()}.` : 'The terminal is attempting to reconnect to alternate data nodes.'}
+                    </p>
                   </div>
                 ) : data.length === 0 ? (
                   <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/20 backdrop-blur-sm rounded-xl z-10">
@@ -303,7 +385,7 @@ Analysis Protocol:
                     <p className="text-xs font-orbitron text-white/20 uppercase tracking-widest">Awaiting Data Stream Initialization...</p>
                   </div>
                 ) : null}
-                <StockAnalysisGraph data={data} />
+                <StockAnalysisGraph data={data} isLive={isLive} />
               </div>
             </div>
 

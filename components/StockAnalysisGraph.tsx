@@ -29,11 +29,18 @@ interface DataPoint {
 
 interface StockAnalysisGraphProps {
   data: DataPoint[];
+  isLive?: boolean;
 }
 
-export function StockAnalysisGraph({ data }: StockAnalysisGraphProps) {
+export function StockAnalysisGraph({ data, isLive }: StockAnalysisGraphProps) {
   return (
     <div className="h-full w-full bg-[#050505] rounded-2xl border border-white/5 p-4 relative overflow-hidden group">
+      {isLive && (
+        <div className="absolute top-4 right-4 z-20 flex items-center space-x-2 bg-neon-green/10 border border-neon-green/30 px-2 py-1 rounded">
+          <div className="w-2 h-2 bg-neon-green rounded-full animate-pulse"></div>
+          <span className="text-[10px] font-bold text-neon-green uppercase tracking-widest">Live</span>
+        </div>
+      )}
       <ResponsiveContainer width="100%" height="100%">
         <ComposedChart data={data}>
           <defs>

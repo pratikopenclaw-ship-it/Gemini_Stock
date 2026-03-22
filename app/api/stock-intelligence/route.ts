@@ -23,10 +23,10 @@ export async function GET(request: Request) {
     let history: any[] = [];
     try {
       const now = new Date();
-      let start = new Date();
+      let start = new Date(now.getTime());
       let interval: "1m" | "5m" | "15m" | "1h" | "1d" | "1wk" | "1mo" = "1h";
 
-      if (timeframe === '1D') {
+      if (timeframe === '1D' || timeframe === 'LIVE') {
         // Fetch 4 days of data to ensure we get the last open market day (especially on weekends)
         start.setDate(now.getDate() - 4);
         interval = "5m";
@@ -45,7 +45,8 @@ export async function GET(request: Request) {
       // The default export is the class itself.
       const yf = new YahooFinance();
       const result = await yf.chart(yahooSymbol, {
-        period1: start,
+        period1: Math.floor(start.getTime() / 1000),
+        period2: Math.floor(now.getTime() / 1000),
         interval: interval,
       });
 

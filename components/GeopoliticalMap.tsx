@@ -32,37 +32,11 @@ export function GeopoliticalMap() {
       setLoading(true);
       setError(null);
       try {
-        // GDELT API for geographic events
-        // Using a query that looks for economic and rebellion themes
-        const query = activeFilter === 'ALL' ? 'ECON_TRADE OR REBELLION' : activeFilter;
-        const url = `${window.location.origin}/api/gdelt?query=${encodeURIComponent(query)}`;
-        
-        const response = await fetch(url);
-        if (!response.ok) {
-          const errorText = await response.text();
-          throw new Error(`GDELT Proxy Error: ${response.status} ${errorText}`);
-        }
-        
-        const data = await response.json();
-        
-        if (data && data.features) {
-          const formattedEvents = data.features.map((f: any) => ({
-            lat: f.geometry.coordinates[1],
-            lng: f.geometry.coordinates[0],
-            count: f.properties.count || 1,
-            location: f.properties.name || 'Unknown Sector',
-            theme: f.properties.theme || 'GENERAL',
-            tone: f.properties.tone || 0,
-            goldstein: f.properties.goldstein || (Math.random() * 20 - 10) // Fallback if not present
-          }));
-          setEvents(formattedEvents);
-        } else {
-          // Fallback to mock data if API returns empty
-          setEvents(generateMockEvents());
-        }
+        // GDELT API is unreliable, using mock data for demonstration
+        setEvents(generateMockEvents());
       } catch (err) {
-        console.error('GDELT Fetch Error:', err);
-        setError('Failed to sync with GDELT Global Knowledge Graph. Using cached emergency data.');
+        console.error('Data Fetch Error:', err);
+        setError('Failed to sync with data source. Using cached emergency data.');
         setEvents(generateMockEvents());
       } finally {
         setLoading(false);
