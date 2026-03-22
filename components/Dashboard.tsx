@@ -150,7 +150,7 @@ export default function Dashboard() {
       <Ticker />
       
       <main className="flex-1 p-6 max-w-[1600px] mx-auto w-full">
-        <SearchHeader onSearch={setSearchQuery} />
+        <SearchHeader onSearch={setSearchQuery} onSelectStock={setSelectedStock} />
 
         {mounted ? (
           <DndContext 

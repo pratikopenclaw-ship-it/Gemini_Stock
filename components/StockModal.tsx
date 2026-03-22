@@ -11,17 +11,7 @@ import {
   Globe, 
   Info 
 } from 'lucide-react';
-import { 
-  ResponsiveContainer, 
-  ComposedChart,
-  Line,
-  Bar,
-  XAxis, 
-  YAxis, 
-  CartesianGrid, 
-  Tooltip, 
-  Cell
-} from 'recharts';
+import { StockAnalysisGraph } from '@/components/StockAnalysisGraph';
 import { motion, AnimatePresence } from 'motion/react';
 
 const formatINR = (value: number) => {
@@ -78,6 +68,33 @@ export function StockModal({ symbol, isOpen, onClose }: StockModalProps) {
         setChange(parseFloat((last - first).toFixed(2)));
         setChangePercent(parseFloat(((last - first) / first * 100).toFixed(2)));
       }, 0);
+
+      // Simulate live updates
+      const interval = setInterval(() => {
+        setData(prev => {
+          if (prev.length === 0) return prev;
+          const lastPoint = prev[prev.length - 1];
+          const volatility = 0.005;
+          const change = lastPoint.price * volatility * (Math.random() - 0.5);
+          const newPrice = parseFloat((lastPoint.price + change).toFixed(2));
+          const newPoint = {
+            time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+            price: newPrice,
+            volume: Math.floor(Math.random() * 50000) + 10000
+          };
+          
+          const newData = [...prev.slice(1), newPoint];
+          const first = newData[0].price;
+          const last = newData[newData.length - 1].price;
+          setCurrentPrice(last);
+          setChange(parseFloat((last - first).toFixed(2)));
+          setChangePercent(parseFloat(((last - first) / first * 100).toFixed(2)));
+          
+          return newData;
+        });
+      }, 3000);
+
+      return () => clearInterval(interval);
     }
   }, [isOpen, timeframe, symbol]);
 
@@ -139,81 +156,14 @@ export function StockModal({ symbol, isOpen, onClose }: StockModalProps) {
             </div>
 
             {/* Main Graph */}
-            <div className="h-[400px] w-full bg-[#050505] rounded-2xl border border-glass-border p-4 relative overflow-hidden group">
+            <div className="h-[400px] w-full relative">
               <div className="absolute top-4 left-4 z-10">
                 <div className="flex items-center space-x-2 text-[10px] font-bold text-white/20 uppercase tracking-widest">
                   <Clock className="w-3 h-3" />
                   <span>Real-time Market Data Stream</span>
                 </div>
               </div>
-              
-              <ResponsiveContainer width="100%" height="100%">
-                <ComposedChart data={data}>
-                  <defs>
-                    <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
-                      <feGaussianBlur stdDeviation="3" result="blur" />
-                      <feComposite in="SourceGraphic" in2="blur" operator="over" />
-                    </filter>
-                  </defs>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#1A1A1A" vertical={false} />
-                  <XAxis 
-                    dataKey="time" 
-                    stroke="rgba(255,255,255,0.2)" 
-                    fontSize={10} 
-                    tickLine={false}
-                    axisLine={false}
-                  />
-                  <YAxis 
-                    yAxisId="price"
-                    stroke="rgba(255,255,255,0.2)" 
-                    fontSize={10} 
-                    tickLine={false}
-                    axisLine={false}
-                    domain={['auto', 'auto']}
-                    tickFormatter={(val) => `₹${val}`}
-                  />
-                  <YAxis 
-                    yAxisId="volume"
-                    orientation="right"
-                    stroke="rgba(255,255,255,0.1)" 
-                    fontSize={10} 
-                    tickLine={false}
-                    axisLine={false}
-                    hide
-                  />
-                  <Tooltip 
-                    content={({ active, payload, label }) => {
-                      if (active && payload && payload.length >= 2) {
-                        return (
-                          <div className="glass-card p-3 border border-neon-blue/30 backdrop-blur-xl bg-black/60">
-                            <p className="text-[10px] font-bold text-white/40 mb-1 uppercase tracking-widest">{label}</p>
-                            <p className="text-sm font-mono font-bold text-neon-green">Price: {formatINR(payload[0].value as number)}</p>
-                            <p className="text-[10px] font-mono text-cyber-blue">Vol: {payload[1].value?.toLocaleString()}</p>
-                          </div>
-                        );
-                      }
-                      return null;
-                    }}
-                  />
-                  <Bar 
-                    yAxisId="volume"
-                    dataKey="volume" 
-                    fill="#00F5FF" 
-                    opacity={0.3}
-                    barSize={20}
-                  />
-                  <Line 
-                    yAxisId="price"
-                    type="monotone" 
-                    dataKey="price" 
-                    stroke="#39FF14" 
-                    strokeWidth={3}
-                    dot={false}
-                    filter="url(#glow)"
-                    animationDuration={1500}
-                  />
-                </ComposedChart>
-              </ResponsiveContainer>
+              <StockAnalysisGraph data={data} />
             </div>
 
             {/* Stats Grid */}

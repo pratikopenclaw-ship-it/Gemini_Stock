@@ -4,29 +4,79 @@ import React, { useEffect, useRef, useState } from 'react';
 import * as d3 from 'd3';
 import * as topojson from 'topojson-client';
 import { Globe, ShieldAlert, Zap, AlertTriangle, Info } from 'lucide-react';
-import { motion } from 'motion/react';
+import { motion, AnimatePresence } from 'motion/react';
 
 interface GeopoliticalIssue {
   country: string;
   intensity: number; // 0 to 1
   issue: string;
   impact: 'High' | 'Medium' | 'Low';
+  details: string;
 }
 
 const MOCK_ISSUES: GeopoliticalIssue[] = [
-  { country: 'Russia', intensity: 0.9, issue: 'Sanctions & Conflict', impact: 'High' },
-  { country: 'Ukraine', intensity: 0.95, issue: 'Direct Conflict', impact: 'High' },
-  { country: 'China', intensity: 0.7, issue: 'Trade Tensions', impact: 'Medium' },
-  { country: 'USA', intensity: 0.4, issue: 'Policy Shifts', impact: 'Medium' },
-  { country: 'Israel', intensity: 0.85, issue: 'Regional Conflict', impact: 'High' },
-  { country: 'Iran', intensity: 0.75, issue: 'Geopolitical Friction', impact: 'High' },
-  { country: 'India', intensity: 0.2, issue: 'Border Stability', impact: 'Low' },
-  { country: 'Taiwan', intensity: 0.8, issue: 'Sovereignty Disputes', impact: 'High' },
+  { 
+    country: 'Russia', 
+    intensity: 0.9, 
+    issue: 'Sanctions & Conflict', 
+    impact: 'High',
+    details: 'Ongoing conflict in Ukraine has led to unprecedented sanctions, disrupting global energy markets and supply chains. Market volatility remains high as geopolitical tensions escalate.'
+  },
+  { 
+    country: 'Ukraine', 
+    intensity: 0.95, 
+    issue: 'Direct Conflict', 
+    impact: 'High',
+    details: 'Active military operations continue to impact agricultural exports and regional stability. Global grain prices are sensitive to developments in this region.'
+  },
+  { 
+    country: 'China', 
+    intensity: 0.7, 
+    issue: 'Trade Tensions', 
+    impact: 'Medium',
+    details: 'Strategic competition with the West over technology and trade routes. Recent export controls on critical minerals have impacted the semiconductor industry.'
+  },
+  { 
+    country: 'USA', 
+    intensity: 0.4, 
+    issue: 'Policy Shifts', 
+    impact: 'Medium',
+    details: 'Upcoming elections and shifts in monetary policy are creating uncertainty in global markets. Trade policy adjustments are being closely monitored.'
+  },
+  { 
+    country: 'Israel', 
+    intensity: 0.85, 
+    issue: 'Regional Conflict', 
+    impact: 'High',
+    details: 'Escalating regional tensions are impacting oil transit routes and maritime security in the Red Sea. Shipping costs have surged due to rerouting.'
+  },
+  { 
+    country: 'Iran', 
+    intensity: 0.75, 
+    issue: 'Geopolitical Friction', 
+    impact: 'High',
+    details: 'Tensions over nuclear programs and regional influence continue to pose risks to energy security. Potential for disruption in the Strait of Hormuz.'
+  },
+  { 
+    country: 'India', 
+    intensity: 0.2, 
+    issue: 'Border Stability', 
+    impact: 'Low',
+    details: 'Localized border friction but overall stable economic outlook. Increasing role as a global manufacturing hub is attracting foreign investment.'
+  },
+  { 
+    country: 'Taiwan', 
+    intensity: 0.8, 
+    issue: 'Sovereignty Disputes', 
+    impact: 'High',
+    details: 'Strategic importance in the global semiconductor supply chain makes any tension here a critical risk for the tech sector worldwide.'
+  },
 ];
 
 export function GeopoliticalMap() {
   const svgRef = useRef<SVGSVGElement>(null);
   const [selectedIssue, setSelectedIssue] = useState<GeopoliticalIssue | null>(null);
+  const [clickedIssue, setClickedIssue] = useState<GeopoliticalIssue | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -71,11 +121,17 @@ export function GeopoliticalMap() {
             setSelectedIssue(issue);
             d3.select(this).attr('stroke', 'rgba(0, 243, 255, 0.8)').attr('stroke-width', 1.5);
           } else {
-            setSelectedIssue({ country: d.properties.name, intensity: 0, issue: 'No major issues detected', impact: 'Low' });
+            setSelectedIssue({ country: d.properties.name, intensity: 0, issue: 'No major issues detected', impact: 'Low', details: '' });
           }
         })
         .on('mouseleave', function() {
           d3.select(this).attr('stroke', 'rgba(0, 243, 255, 0.1)').attr('stroke-width', 0.5);
+        })
+        .on('click', function(event, d: any) {
+          const issue = MOCK_ISSUES.find(i => i.country === d.properties.name);
+          if (issue) {
+            setClickedIssue(issue);
+          }
         });
 
       // Add glow effect
@@ -130,7 +186,7 @@ export function GeopoliticalMap() {
         />
         
         {/* Floating Info Card */}
-        {selectedIssue && (
+        {selectedIssue && !clickedIssue && (
           <motion.div 
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
@@ -154,8 +210,77 @@ export function GeopoliticalMap() {
                 className={`h-full ${selectedIssue.intensity > 0.7 ? 'bg-red-500' : 'bg-neon-blue'}`}
               />
             </div>
+            <p className="text-[8px] text-white/40 mt-2 uppercase tracking-widest">Click for deep analysis</p>
           </motion.div>
         )}
+
+        {/* Detailed Modal for Clicked Issue */}
+        <AnimatePresence>
+          {clickedIssue && (
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="absolute inset-0 z-40 flex items-center justify-center bg-black/60 backdrop-blur-md p-6"
+            >
+              <motion.div 
+                initial={{ scale: 0.9, y: 20 }}
+                animate={{ scale: 1, y: 0 }}
+                exit={{ scale: 0.9, y: 20 }}
+                className="glass-card p-6 max-w-md border-neon-blue/50 bg-black/90 relative"
+              >
+                <button 
+                  onClick={() => setClickedIssue(null)}
+                  className="absolute top-4 right-4 text-white/40 hover:text-white transition-colors"
+                >
+                  <Zap className="w-4 h-4 rotate-45" />
+                </button>
+                
+                <div className="flex items-center space-x-3 mb-4">
+                  <div className={`w-10 h-10 rounded-lg flex items-center justify-center border ${
+                    clickedIssue.impact === 'High' ? 'bg-red-500/20 border-red-500/30 text-red-500' : 
+                    'bg-neon-blue/20 border-neon-blue/30 text-neon-blue'
+                  }`}>
+                    <Globe className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h3 className="font-orbitron text-lg font-bold text-white">{clickedIssue.country}</h3>
+                    <p className="text-[10px] font-bold text-white/40 uppercase tracking-widest">{clickedIssue.issue}</p>
+                  </div>
+                </div>
+
+                <div className="space-y-4">
+                  <div>
+                    <span className="text-[10px] font-bold text-white/40 uppercase tracking-widest block mb-1">Risk Intensity</span>
+                    <div className="w-full bg-white/5 h-2 rounded-full overflow-hidden">
+                      <div 
+                        className={`h-full ${clickedIssue.intensity > 0.7 ? 'bg-red-500' : 'bg-neon-blue'}`}
+                        style={{ width: `${clickedIssue.intensity * 100}%` }}
+                      />
+                    </div>
+                  </div>
+                  
+                  <div>
+                    <span className="text-[10px] font-bold text-white/40 uppercase tracking-widest block mb-1">Market Impact Analysis</span>
+                    <p className="text-xs text-white/80 leading-relaxed italic">
+                      &quot;{clickedIssue.details}&quot;
+                    </p>
+                  </div>
+
+                  <div className="pt-4 border-t border-white/10 flex justify-between items-center">
+                    <span className="text-[10px] font-bold text-white/40 uppercase tracking-widest">Status: Monitoring</span>
+                    <button 
+                      onClick={() => setClickedIssue(null)}
+                      className="text-[10px] font-bold text-neon-blue uppercase tracking-widest hover:underline"
+                    >
+                      Close Analysis
+                    </button>
+                  </div>
+                </div>
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
 
       <div className="mt-6 grid grid-cols-3 gap-4 relative z-10">
